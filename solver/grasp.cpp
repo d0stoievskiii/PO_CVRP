@@ -102,10 +102,11 @@ Solution constructInitialSolution(
             route.load += getDemand(instance, chosen.customerId);
             currentNode = chosen.customerId;
 
-            unrouted.erase(
-                std::remove(unrouted.begin(), unrouted.end(), chosen.customerId),
-                unrouted.end()
-            );
+            auto it = std::find(unrouted.begin(), unrouted.end(), chosen.customerId);
+            if (it != unrouted.end()) {
+                *it = unrouted.back();
+                unrouted.pop_back();
+            }
 
             insertedAtLeastOne = true;
         }
@@ -145,19 +146,26 @@ Solution constructInitialSolution(
 Solution graspVND(
     const CVRPInstance& instance,
     int maxIterations,
-    double alpha
+    double alpha,
+    std::mt19937& rng, 
+    const VNDConfig& config
 ) {
     Solution bestSolution;
     bestSolution.totalCost = std::numeric_limits<int>::max();
-
-    std::random_device rd;
-    std::mt19937 rng(rd());
 
     for (int it = 0; it < maxIterations; it++) {
         Solution s = constructInitialSolution(instance, alpha, rng);
         updateSolutionInfo(instance, s);
 
-        s = VND(s, instance);
+        if (config.useRelocate || config.useSwap || config.useTwoOpt) {
+            s = VND(s, instance, config);
+            updateSolutionInfo(instance, s);
+        }
+
+        if (!validateSolution(instance, s)) {
+            std::cout << s;
+            throw std::runtime_error("Solucao invalida gerada pelo algoritmo.");
+        }
 
         if (s.totalCost < bestSolution.totalCost) {
             bestSolution = s;

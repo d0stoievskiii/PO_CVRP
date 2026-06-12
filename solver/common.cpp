@@ -74,3 +74,24 @@ void removeEmptyRoutes(Solution& solution) {
         solution.routes.end()
     );
 }
+
+int routeCostWithCustomers(
+    const CVRPInstance& instance,
+    const std::vector<int>& customers
+) {
+    int depotId = instance.depotId;
+
+    if (customers.empty()) {
+        return 0;
+    }
+
+    int cost = dist(instance, depotId, customers.front());
+
+    for (size_t i = 0; i + 1 < customers.size(); i++) {
+        cost += dist(instance, customers[i], customers[i + 1]);
+    }
+
+    cost += dist(instance, customers.back(), depotId);
+
+    return cost;
+}

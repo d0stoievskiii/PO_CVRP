@@ -1,2 +1,5 @@
 *.exe
 *.stackdump
+
+*.csv
+*.~lock.results.csv#

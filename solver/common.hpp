@@ -14,6 +14,17 @@ struct Candidate {
     int insertionCost;
 };
 
+struct VNDConfig {
+    bool useRelocate = true;
+    bool useSwap = true;
+    bool useTwoOpt = true;
+};
+
+struct AlgorithmVariant {
+    std::string name;
+    VNDConfig config;
+};
+
 int getDemand(const CVRPInstance& instance, int nodeId);
 
 int dist(const CVRPInstance& instance, int fromId, int toId);
@@ -29,3 +40,5 @@ void updateRouteInfo(const CVRPInstance& instance, Route& route);
 void updateSolutionInfo(const CVRPInstance& instance, Solution& solution);
 
 void removeEmptyRoutes(Solution& solution);
+
+int routeCostWithCustomers(const CVRPInstance& instance, const std::vector<int>& customers);

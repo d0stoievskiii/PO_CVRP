@@ -4,9 +4,14 @@ Solution bestRelocate(
     const Solution& current,
     const CVRPInstance& instance
 ) {
-    Solution best = current;
+    int bestDelta = 0;
 
-    int bestCost = current.totalCost;
+    size_t bestOriginRoute = 0;
+    size_t bestOriginPos = 0;
+    size_t bestDestRoute = 0;
+    size_t bestDestPos = 0;
+
+    bool foundImprovement = false;
 
     for (size_t originRouteIndex = 0; originRouteIndex < current.routes.size(); originRouteIndex++) {
         const Route& originRoute = current.routes[originRouteIndex];
@@ -19,69 +24,118 @@ Solution bestRelocate(
                 const Route& destRoute = current.routes[destRouteIndex];
 
                 for (size_t destPos = 0; destPos <= destRoute.customers.size(); destPos++) {
-
-                    // Evita movimento que não muda nada na mesma rota.
                     if (originRouteIndex == destRouteIndex) {
                         if (destPos == originPos || destPos == originPos + 1) {
                             continue;
                         }
                     }
 
-                    // Checagem de capacidade quando move entre rotas diferentes.
                     if (originRouteIndex != destRouteIndex) {
                         if (destRoute.load + customerDemand > instance.capacity) {
                             continue;
                         }
                     }
 
-                    Solution neighbor = current;
+                    int oldCost;
+                    int newCost;
 
-                    Route& neighborOrigin = neighbor.routes[originRouteIndex];
-                    Route& neighborDest = neighbor.routes[destRouteIndex];
+                    if (originRouteIndex == destRouteIndex) {
+                        std::vector<int> candidate = originRoute.customers;
 
-                    // Remove cliente da origem.
-                    neighborOrigin.customers.erase(
-                        neighborOrigin.customers.begin() + originPos
-                    );
+                        candidate.erase(candidate.begin() + originPos);
 
-                    // Se for a mesma rota e removemos uma posição anterior,
-                    // o índice de inserção precisa ser ajustado.
-                    size_t adjustedDestPos = destPos;
+                        size_t adjustedDestPos = destPos;
+                        if (destPos > originPos) {
+                            adjustedDestPos--;
+                        }
 
-                    if (originRouteIndex == destRouteIndex && destPos > originPos) {
-                        adjustedDestPos--;
+                        if (adjustedDestPos > candidate.size()) {
+                            continue;
+                        }
+
+                        candidate.insert(candidate.begin() + adjustedDestPos, customer);
+
+                        oldCost = originRoute.cost;
+                        newCost = routeCostWithCustomers(instance, candidate);
+                    } else {
+                        std::vector<int> candidateOrigin = originRoute.customers;
+                        std::vector<int> candidateDest = destRoute.customers;
+
+                        candidateOrigin.erase(candidateOrigin.begin() + originPos);
+                        candidateDest.insert(candidateDest.begin() + destPos, customer);
+
+                        oldCost = originRoute.cost + destRoute.cost;
+                        newCost =
+                            routeCostWithCustomers(instance, candidateOrigin)
+                            + routeCostWithCustomers(instance, candidateDest);
                     }
 
-                    // Cuidado: depois do erase, referências podem continuar válidas
-                    // porque não alteramos o vetor routes, só o vetor customers.
-                    neighborDest.customers.insert(
-                        neighborDest.customers.begin() + adjustedDestPos,
-                        customer
-                    );
+                    int delta = newCost - oldCost;
 
-                    updateSolutionInfo(instance, neighbor);
-                    removeEmptyRoutes(neighbor);
-                    updateSolutionInfo(instance, neighbor);
-
-                    if (neighbor.totalCost < bestCost) {
-                        best = neighbor;
-                        bestCost = neighbor.totalCost;
+                    if (delta < bestDelta) {
+                        bestDelta = delta;
+                        bestOriginRoute = originRouteIndex;
+                        bestOriginPos = originPos;
+                        bestDestRoute = destRouteIndex;
+                        bestDestPos = destPos;
+                        foundImprovement = true;
                     }
                 }
             }
         }
     }
 
-    return best;
+    if (!foundImprovement) {
+        return current;
+    }
+
+    Solution result = current;
+
+    int customer = result.routes[bestOriginRoute].customers[bestOriginPos];
+
+    result.routes[bestOriginRoute].customers.erase(
+        result.routes[bestOriginRoute].customers.begin() + bestOriginPos
+    );
+
+    size_t adjustedDestPos = bestDestPos;
+
+    if (bestOriginRoute == bestDestRoute && bestDestPos > bestOriginPos) {
+        adjustedDestPos--;
+    }
+
+    result.routes[bestDestRoute].customers.insert(
+        result.routes[bestDestRoute].customers.begin() + adjustedDestPos,
+        customer
+    );
+
+    updateRouteInfo(instance, result.routes[bestOriginRoute]);
+
+    if (bestOriginRoute != bestDestRoute) {
+        updateRouteInfo(instance, result.routes[bestDestRoute]);
+    }
+
+    removeEmptyRoutes(result);
+
+    result.totalCost = current.totalCost + bestDelta;
+
+    // Se removeu rota vazia, melhor recalcular só uma vez por segurança.
+    updateSolutionInfo(instance, result);
+
+    return result;
 }
 
 Solution bestSwap(
     const Solution& current,
     const CVRPInstance& instance
 ) {
-    Solution best = current;
+    int bestDelta = 0;
 
-    int bestCost = current.totalCost;
+    size_t bestRouteA = 0;
+    size_t bestPosA = 0;
+    size_t bestRouteB = 0;
+    size_t bestPosB = 0;
+
+    bool foundImprovement = false;
 
     for (size_t routeAIndex = 0; routeAIndex < current.routes.size(); routeAIndex++) {
         const Route& routeA = current.routes[routeAIndex];
@@ -94,7 +148,6 @@ Solution bestSwap(
                 const Route& routeB = current.routes[routeBIndex];
 
                 size_t startPosB = 0;
-
                 if (routeAIndex == routeBIndex) {
                     startPosB = posA + 1;
                 }
@@ -103,7 +156,6 @@ Solution bestSwap(
                     int customerB = routeB.customers[posB];
                     int demandB = getDemand(instance, customerB);
 
-                    // Se estiverem em rotas diferentes, precisa verificar capacidade.
                     if (routeAIndex != routeBIndex) {
                         int newLoadA = routeA.load - demandA + demandB;
                         int newLoadB = routeB.load - demandB + demandA;
@@ -113,34 +165,73 @@ Solution bestSwap(
                         }
                     }
 
-                    Solution neighbor = current;
+                    int oldCost;
+                    int newCost;
 
-                    std::swap(
-                        neighbor.routes[routeAIndex].customers[posA],
-                        neighbor.routes[routeBIndex].customers[posB]
-                    );
+                    if (routeAIndex == routeBIndex) {
+                        std::vector<int> candidate = routeA.customers;
+                        std::swap(candidate[posA], candidate[posB]);
 
-                    updateSolutionInfo(instance, neighbor);
+                        oldCost = routeA.cost;
+                        newCost = routeCostWithCustomers(instance, candidate);
+                    } else {
+                        std::vector<int> candidateA = routeA.customers;
+                        std::vector<int> candidateB = routeB.customers;
 
-                    if (neighbor.totalCost < bestCost) {
-                        best = neighbor;
-                        bestCost = neighbor.totalCost;
+                        std::swap(candidateA[posA], candidateB[posB]);
+
+                        oldCost = routeA.cost + routeB.cost;
+                        newCost =
+                            routeCostWithCustomers(instance, candidateA)
+                            + routeCostWithCustomers(instance, candidateB);
+                    }
+
+                    int delta = newCost - oldCost;
+
+                    if (delta < bestDelta) {
+                        bestDelta = delta;
+                        bestRouteA = routeAIndex;
+                        bestPosA = posA;
+                        bestRouteB = routeBIndex;
+                        bestPosB = posB;
+                        foundImprovement = true;
                     }
                 }
             }
         }
     }
 
-    return best;
+    if (!foundImprovement) {
+        return current;
+    }
+
+    Solution result = current;
+
+    std::swap(
+        result.routes[bestRouteA].customers[bestPosA],
+        result.routes[bestRouteB].customers[bestPosB]
+    );
+
+    updateRouteInfo(instance, result.routes[bestRouteA]);
+
+    if (bestRouteA != bestRouteB) {
+        updateRouteInfo(instance, result.routes[bestRouteB]);
+    }
+
+    result.totalCost = current.totalCost + bestDelta;
+
+    return result;
 }
 
 Solution bestTwoOptIntra(
     const Solution& current,
     const CVRPInstance& instance
 ) {
-    Solution best = current;
-
-    int bestCost = current.totalCost;
+    int bestDelta = 0;
+    size_t bestRouteIndex = 0;
+    size_t bestI = 0;
+    size_t bestJ = 0;
+    bool foundImprovement = false;
 
     for (size_t routeIndex = 0; routeIndex < current.routes.size(); routeIndex++) {
         const Route& route = current.routes[routeIndex];
@@ -149,36 +240,64 @@ Solution bestTwoOptIntra(
             continue;
         }
 
+        int oldRouteCost = route.cost;
+
         for (size_t i = 0; i < route.customers.size() - 1; i++) {
             for (size_t j = i + 1; j < route.customers.size(); j++) {
-
-                Solution neighbor = current;
+                std::vector<int> candidateCustomers = route.customers;
 
                 std::reverse(
-                    neighbor.routes[routeIndex].customers.begin() + i,
-                    neighbor.routes[routeIndex].customers.begin() + j + 1
+                    candidateCustomers.begin() + i,
+                    candidateCustomers.begin() + j + 1
                 );
 
-                updateSolutionInfo(instance, neighbor);
+                int newRouteCost = routeCostWithCustomers(instance, candidateCustomers);
+                int delta = newRouteCost - oldRouteCost;
 
-                if (neighbor.totalCost < bestCost) {
-                    best = neighbor;
-                    bestCost = neighbor.totalCost;
+                if (delta < bestDelta) {
+                    bestDelta = delta;
+                    bestRouteIndex = routeIndex;
+                    bestI = i;
+                    bestJ = j;
+                    foundImprovement = true;
                 }
             }
         }
     }
 
-    return best;
+    if (!foundImprovement) {
+        return current;
+    }
+
+    Solution result = current;
+
+    std::reverse(
+        result.routes[bestRouteIndex].customers.begin() + bestI,
+        result.routes[bestRouteIndex].customers.begin() + bestJ + 1
+    );
+
+    updateRouteInfo(instance, result.routes[bestRouteIndex]);
+    result.totalCost = current.totalCost + bestDelta;
+
+    return result;
 }
 
-Solution VND(const Solution& initial, const CVRPInstance& instance) {
+Solution VND(const Solution& initial, const CVRPInstance& instance, const VNDConfig& config) {
     Solution current = initial;
 
-    int k = 0;
-    int numberOfNeighborhoods = 3;
+    std::vector<int> neighborhoods;
 
-    while (k < numberOfNeighborhoods) {
+    if (config.useRelocate) neighborhoods.push_back(0);
+    if (config.useSwap) neighborhoods.push_back(1);
+    if (config.useTwoOpt) neighborhoods.push_back(2);
+
+    if (neighborhoods.empty()) {
+        return current;
+    }
+
+    int k = 0;
+
+    while (k < static_cast<int>(neighborhoods.size())) {
         Solution neighbor;
 
         if (k == 0) {
