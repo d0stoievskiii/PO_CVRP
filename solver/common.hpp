@@ -18,6 +18,7 @@ struct VNDConfig {
     bool useRelocate = true;
     bool useSwap = true;
     bool useTwoOpt = true;
+    bool useTwoOptInter = false;
 };
 
 struct AlgorithmVariant {
@@ -32,6 +33,8 @@ int dist(const CVRPInstance& instance, int fromId, int toId);
 int calculateRouteCost(const CVRPInstance& instance, const Route& route);
 
 int calculateRouteLoad(const CVRPInstance& instance, const Route& route);
+
+int calculateRouteLoad(const CVRPInstance& instance, const std::vector<int>& route);
 
 int calculateSolutionCost(const CVRPInstance& instance, const Solution& solution);
 

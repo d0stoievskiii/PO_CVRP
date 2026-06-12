@@ -18,6 +18,16 @@ int calculateRouteLoad(const CVRPInstance& instance, const Route& route) {
     return load;
 }
 
+int calculateRouteLoad(const CVRPInstance& instance, const std::vector<int>& route) {
+    int load = 0;
+
+    for (int customerId : route) {
+        load += getDemand(instance, customerId);
+    }
+
+    return load;
+}
+
 int calculateRouteCost(const CVRPInstance& instance, const Route& route) {
     int depotId = instance.depotId;
 

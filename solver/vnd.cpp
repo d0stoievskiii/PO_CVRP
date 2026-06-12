@@ -282,6 +282,172 @@ Solution bestTwoOptIntra(
     return result;
 }
 
+
+Solution bestTwoOptInter(
+    const Solution& current,
+    const CVRPInstance& instance
+) {
+    int bestDelta = 0;
+
+    size_t bestRouteA = 0;
+    size_t bestRouteB = 0;
+    size_t bestCutA = 0;
+    size_t bestCutB = 0;
+
+    bool foundImprovement = false;
+
+    for (size_t routeAIndex = 0; routeAIndex < current.routes.size(); routeAIndex++) {
+        const Route& routeA = current.routes[routeAIndex];
+
+        for (size_t routeBIndex = routeAIndex + 1; routeBIndex < current.routes.size(); routeBIndex++) {
+            const Route& routeB = current.routes[routeBIndex];
+
+            /*
+                cutA representa quantos clientes ficam no prefixo da rota A.
+
+                Exemplo:
+                    routeA = [10, 20, 30, 40]
+
+                cutA = 0:
+                    prefixA = []
+                    suffixA = [10, 20, 30, 40]
+
+                cutA = 2:
+                    prefixA = [10, 20]
+                    suffixA = [30, 40]
+
+                cutA = 4:
+                    prefixA = [10, 20, 30, 40]
+                    suffixA = []
+
+                Permitimos 0 e size(), mas depois evitamos gerar rotas vazias
+                se isso for indesejado.
+            */
+
+            for (size_t cutA = 0; cutA <= routeA.customers.size(); cutA++) {
+                for (size_t cutB = 0; cutB <= routeB.customers.size(); cutB++) {
+
+                    std::vector<int> newRouteA;
+                    std::vector<int> newRouteB;
+
+                    // newRouteA = prefixA + suffixB
+                    newRouteA.insert(
+                        newRouteA.end(),
+                        routeA.customers.begin(),
+                        routeA.customers.begin() + cutA
+                    );
+
+                    newRouteA.insert(
+                        newRouteA.end(),
+                        routeB.customers.begin() + cutB,
+                        routeB.customers.end()
+                    );
+
+                    // newRouteB = prefixB + suffixA
+                    newRouteB.insert(
+                        newRouteB.end(),
+                        routeB.customers.begin(),
+                        routeB.customers.begin() + cutB
+                    );
+
+                    newRouteB.insert(
+                        newRouteB.end(),
+                        routeA.customers.begin() + cutA,
+                        routeA.customers.end()
+                    );
+
+                    // Evita rotas vazias. Pode remover esta restrição se quiser
+                    // permitir que uma rota desapareça.
+                    if (newRouteA.empty() || newRouteB.empty()) {
+                        continue;
+                    }
+
+                    int loadA = calculateRouteLoad(instance, newRouteA);
+                    int loadB = calculateRouteLoad(instance, newRouteB);
+
+                    if (loadA > instance.capacity || loadB > instance.capacity) {
+                        continue;
+                    }
+
+                    int oldCost = routeA.cost + routeB.cost;
+
+                    int newCost =
+                        routeCostWithCustomers(instance, newRouteA)
+                        + routeCostWithCustomers(instance, newRouteB);
+
+                    int delta = newCost - oldCost;
+
+                    if (delta < bestDelta) {
+                        bestDelta = delta;
+                        bestRouteA = routeAIndex;
+                        bestRouteB = routeBIndex;
+                        bestCutA = cutA;
+                        bestCutB = cutB;
+                        foundImprovement = true;
+                    }
+                }
+            }
+        }
+    }
+
+    if (!foundImprovement) {
+        return current;
+    }
+
+    Solution result = current;
+
+    std::vector<int> oldA = current.routes[bestRouteA].customers;
+    std::vector<int> oldB = current.routes[bestRouteB].customers;
+
+    std::vector<int> newA;
+    std::vector<int> newB;
+
+    newA.insert(
+        newA.end(),
+        oldA.begin(),
+        oldA.begin() + bestCutA
+    );
+
+    newA.insert(
+        newA.end(),
+        oldB.begin() + bestCutB,
+        oldB.end()
+    );
+
+    newB.insert(
+        newB.end(),
+        oldB.begin(),
+        oldB.begin() + bestCutB
+    );
+
+    newB.insert(
+        newB.end(),
+        oldA.begin() + bestCutA,
+        oldA.end()
+    );
+
+    result.routes[bestRouteA].customers = newA;
+    result.routes[bestRouteB].customers = newB;
+
+    updateSolutionInfo(instance, result);
+
+    if (!validateSolution(instance, result)) {
+    std::cerr << "Erro gerado em bestTwoOptInter\n";
+    std::cerr << "bestRouteA=" << bestRouteA
+              << " bestCutA=" << bestCutA
+              << " bestRouteB=" << bestRouteB
+              << " bestCutB=" << bestCutB
+              << "\n";
+
+    std::cout << current;
+    std::cout << result;
+
+    throw std::runtime_error("bestTwoOptInter gerou solucao invalida.");
+}
+
+    return result;
+}
+
 Solution VND(const Solution& initial, const CVRPInstance& instance, const VNDConfig& config) {
     Solution current = initial;
 
@@ -290,6 +456,7 @@ Solution VND(const Solution& initial, const CVRPInstance& instance, const VNDCon
     if (config.useRelocate) neighborhoods.push_back(0);
     if (config.useSwap) neighborhoods.push_back(1);
     if (config.useTwoOpt) neighborhoods.push_back(2);
+    if (config.useTwoOptInter) neighborhoods.push_back(3);
 
     if (neighborhoods.empty()) {
         return current;
@@ -305,6 +472,8 @@ Solution VND(const Solution& initial, const CVRPInstance& instance, const VNDCon
         } else if (k == 1) {
             neighbor = bestSwap(current, instance);
         } else if (k == 2) {
+            neighbor = bestTwoOptIntra(current, instance);
+        }  else if (k == 3) {
             neighbor = bestTwoOptIntra(current, instance);
         }
 

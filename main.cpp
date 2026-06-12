@@ -31,17 +31,18 @@ void runExperiments() {
     };
 
     std::vector<AlgorithmVariant> variants = {
-        {"G0", {false, false, false}},
-        {"G1", {true,  false, false}},
-        {"G2", {true,  true,  false}},
-        {"G3", {true,  true,  true }}
+        {"G0", {false, false, false, false}},
+        {"G1", {true,  false, false, false}},
+        {"G2", {true,  true,  false, false}},
+        {"G3", {true,  true,  true,  false}},
+        {"G4", {true,  true,  true,  true }}
     };
 
     double alpha = 0.3;
     int maxIterations = 100;
     int runsPerInstance = 10;
 
-    std::ofstream out("results.csv");
+    std::ofstream out("results2.csv");
     writeCsvHeader(out);
 
     for (const InstanceFile& file : instances) {
