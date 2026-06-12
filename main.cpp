@@ -12,9 +12,6 @@ int main() {
 
         auto dist = buildDistanceMatrix(instance);
         instance.distance = dist;
-
-        
-
         
         std::cout << "Instancia: " << instance.name << "\n";
         std::cout << "Tipo: " << instance.type << "\n";
@@ -27,6 +24,7 @@ int main() {
         
         Solution s = graspVND(instance, 50, 0.5);
         int computedCost = solutionCost(s, dist, instance.depotId);
+        std::cout << s;
         std::cout << "Custo calculado: " << computedCost << "\n";
 
 

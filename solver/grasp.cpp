@@ -17,10 +17,23 @@ Solution constructInitialSolution(
 
     std::vector<int> unrouted;
 
-    for (const Node& node : instance.nodes) {
-        if (node.id != depotId) {
-            unrouted.push_back(node.id);
+    for (int id = 1; id <= instance.dimension; id++) {
+        if (id == depotId) {
+            continue;
         }
+
+        int demand = getDemand(instance, id);
+
+        if (demand > instance.capacity) {
+            throw std::runtime_error(
+                "Cliente " + std::to_string(id) +
+                " possui demanda " + std::to_string(demand) +
+                " maior que a capacidade " +
+                std::to_string(instance.capacity)
+            );
+        }
+
+        unrouted.push_back(id);
     }
 
     while (!unrouted.empty()) {
@@ -73,6 +86,17 @@ Solution constructInitialSolution(
             );
 
             Candidate chosen = rcl[distribution(rng)];
+            int chosenDemand = getDemand(instance, chosen.customerId);
+
+            // Trava de segurança.
+            if (route.load + chosenDemand > instance.capacity) {
+                std::cerr << "route.load=" << route.load
+                    << " chosenDemand=" << chosenDemand
+                    << " capacity=" << instance.capacity
+                    << "\n";
+
+                throw std::runtime_error("BUG: insercao excederia capacidade.");
+            }
 
             route.customers.push_back(chosen.customerId);
             route.load += getDemand(instance, chosen.customerId);
@@ -87,17 +111,33 @@ Solution constructInitialSolution(
         }
 
         if (!insertedAtLeastOne) {
+            std::cerr << "Clientes restantes:\n";
+            for (int customerId : unrouted) {
+                std::cerr << "Cliente " << customerId
+                          << " demanda=" << getDemand(instance, customerId)
+                          << "\n";
+            }
+
             throw std::runtime_error(
                 "Nao foi possivel inserir nenhum cliente. "
-                "Verifique se existe demanda maior que a capacidade do veiculo."
+                "Verifique demandas, capacidade e IDs dos clientes."
             );
         }
 
-        route.cost = calculateRouteCost(instance, route);
+        if (route.customers.empty()) {
+            throw std::runtime_error("Rota vazia criada.");
+        }
+
+        updateRouteInfo(instance, route);
+
+        if (route.load > instance.capacity) {
+            throw std::runtime_error("BUG: rota construida excede capacidade.");
+        }
         solution.routes.push_back(route);
     }
 
     solution.totalCost = calculateSolutionCost(instance, solution);
+    updateSolutionInfo(instance, solution);
 
     return solution;
 }
@@ -115,6 +155,7 @@ Solution graspVND(
 
     for (int it = 0; it < maxIterations; it++) {
         Solution s = constructInitialSolution(instance, alpha, rng);
+        updateSolutionInfo(instance, s);
 
         s = VND(s, instance);
 

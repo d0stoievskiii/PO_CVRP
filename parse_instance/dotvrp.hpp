@@ -31,13 +31,29 @@ struct CVRPInstance {
 
 struct Route {
     std::vector<int> customers;
-    int load;
-    int cost;
+    int load = 0;
+    int cost = 0;
 };
 
 struct Solution {
     std::vector<Route> routes;
-    int totalCost;
+    int totalCost = 0;
+
+    friend std::ostream& operator<<(std::ostream& os, const Solution& sol) {
+        os << "Solution:" << std::endl;
+
+        int count = 1;
+        for (const auto& route : sol.routes) {
+            os << "Route #" << count++ << ": ";
+            for (const auto& node : route.customers) {
+                os << node << " ";
+            }
+            os << std::endl;
+            os << "load: " << route.load << std::endl;
+            os << "cost: " << route.cost << std::endl;
+        }
+        return os;
+    }
 };
 
 
